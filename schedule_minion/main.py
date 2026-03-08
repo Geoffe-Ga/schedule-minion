@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import signal
 
 import discord
 from discord.ext import commands
@@ -55,9 +56,23 @@ def main() -> None:
     async def run() -> None:
         bot = await setup_bot()
         settings = Settings.from_env()
+
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(
+                sig,
+                lambda: asyncio.ensure_future(_shutdown(bot)),
+            )
+
         await bot.start(settings.discord_token)
 
     asyncio.run(run())
+
+
+async def _shutdown(bot: commands.Bot) -> None:
+    """Gracefully shut down the bot on SIGTERM/SIGINT."""
+    logger.info("Received shutdown signal, closing bot...")
+    await bot.close()
 
 
 if __name__ == "__main__":
