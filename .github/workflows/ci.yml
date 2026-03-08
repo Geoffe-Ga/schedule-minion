@@ -70,7 +70,7 @@ jobs:
 
       - name: Run MyPy type checking
         run: |
-          mypy . --install-types --non-interactive --ignore-missing-imports --show-error-codes --pretty
+          mypy schedule_minion/ --show-error-codes --pretty
         continue-on-error: false
 
       - name: Run Bandit security scan
