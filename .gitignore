@@ -1,0 +1,27 @@
+# Credentials
+/credentials/
+
+# Environment
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Coverage
+htmlcov/
+coverage.xml
+.coverage
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Virtual environment
+.venv/
