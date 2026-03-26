@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from schedule_minion.config import Settings, _write_credentials_file
+from schedule_minion.config import Settings
 
 
 class TestSettings:
@@ -29,6 +29,7 @@ class TestSettings:
         assert settings.discord_channel_id == 123456
         assert settings.anthropic_api_key == "sk-test-key"
         assert settings.google_credentials_path == "creds/sa.json"
+        assert settings.google_credentials_info is None
         assert settings.family_calendar_id == "family@group.calendar.google.com"
 
     def test_default_timezone(self) -> None:
@@ -62,7 +63,7 @@ class TestSettings:
         with pytest.raises(AttributeError):
             settings.discord_token = "new-value"  # type: ignore[misc]
 
-    def test_google_credentials_json_creates_temp_file(self) -> None:
+    def test_google_credentials_json_stores_info_dict(self) -> None:
         creds = {"type": "service_account", "project_id": "test"}
         env = {
             "DISCORD_TOKEN": "t",
@@ -74,9 +75,8 @@ class TestSettings:
         with patch.dict(os.environ, env, clear=False):
             settings = Settings.from_env()
 
-        assert settings.google_credentials_path.endswith(".json")
-        with open(settings.google_credentials_path) as f:
-            assert json.load(f) == creds
+        assert settings.google_credentials_info == creds
+        assert settings.google_credentials_path == ""
 
     def test_credentials_path_takes_precedence_over_json(self) -> None:
         env = {
@@ -91,6 +91,7 @@ class TestSettings:
             settings = Settings.from_env()
 
         assert settings.google_credentials_path == "explicit/path.json"
+        assert settings.google_credentials_info is None
 
     def test_no_credentials_raises(self) -> None:
         env = {
@@ -104,17 +105,3 @@ class TestSettings:
             pytest.raises(KeyError, match="GOOGLE_CREDENTIALS"),
         ):
             Settings.from_env()
-
-
-class TestWriteCredentialsFile:
-    """Tests for _write_credentials_file helper."""
-
-    def test_writes_valid_json(self) -> None:
-        creds = {"type": "service_account", "key": "value"}
-        path = _write_credentials_file(json.dumps(creds))
-        with open(path) as f:
-            assert json.load(f) == creds
-
-    def test_returns_json_suffix(self) -> None:
-        path = _write_credentials_file('{"a": 1}')
-        assert path.endswith(".json")

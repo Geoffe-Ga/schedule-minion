@@ -6,6 +6,7 @@ import asyncio
 import logging
 from datetime import datetime
 from functools import partial
+from typing import Any
 
 from google.oauth2 import service_account
 from googleapiclient.discovery import build  # type: ignore[import-untyped]
@@ -42,17 +43,28 @@ def _parse_attendees_from_description(description: str | None) -> list[str]:
 class CalendarService:
     """Manages Google Calendar events via the Google Calendar API."""
 
-    def __init__(self, credentials_path: str, timezone: str) -> None:
+    def __init__(
+        self,
+        timezone: str,
+        credentials_path: str = "",
+        credentials_info: dict[str, Any] | None = None,
+    ) -> None:
         self.timezone = timezone
         self._credentials_path = credentials_path
+        self._credentials_info = credentials_info
         self._service = None
 
     def _get_service(self):  # type: ignore[no-untyped-def]
         """Lazily initialize the Google Calendar API service."""
         if self._service is None:
-            credentials = service_account.Credentials.from_service_account_file(
-                self._credentials_path, scopes=SCOPES
-            )
+            if self._credentials_info:
+                credentials = service_account.Credentials.from_service_account_info(
+                    self._credentials_info, scopes=SCOPES
+                )
+            else:
+                credentials = service_account.Credentials.from_service_account_file(
+                    self._credentials_path, scopes=SCOPES
+                )
             self._service = build("calendar", "v3", credentials=credentials)
         return self._service
 
