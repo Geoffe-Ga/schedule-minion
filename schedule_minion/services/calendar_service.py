@@ -9,7 +9,7 @@ from functools import partial
 from typing import Any
 
 from google.oauth2 import service_account
-from googleapiclient.discovery import build  # type: ignore[import-untyped]
+from googleapiclient.discovery import build
 
 from schedule_minion.models.events import CalendarEvent, FamilyMember
 

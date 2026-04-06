@@ -338,7 +338,7 @@ class SchedulerCog(commands.Cog):
         )
 
         if not events:
-            await channel.send(  # type: ignore[union-attr]
+            await channel.send(
                 "**Weekly Briefing**\n\n"
                 "Nothing on the books this week! "
                 "The Minion awaits your commands."
@@ -362,7 +362,7 @@ class SchedulerCog(commands.Cog):
                 summary_lines.append(f"  * {time_str} -- **{e.title}**{loc}{att}")
 
         summary = "\n".join(summary_lines)
-        await channel.send(  # type: ignore[union-attr]
+        await channel.send(
             f"**Weekly Briefing -- Here's what's coming up!**\n{summary}\n\n"
             f"*Your faithful Minion is standing by for changes.*"
         )

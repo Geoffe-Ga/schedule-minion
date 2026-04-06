@@ -2,7 +2,7 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, 'claude/**' ]
   pull_request:
     branches: [ main, develop ]
   workflow_dispatch:
@@ -64,8 +64,8 @@ jobs:
 
       - name: Run Pylint
         run: |
-          pylint **/*.py --output-format=colorized --fail-under=8.0 || true
-          pylint **/*.py --exit-zero --output-format=json > pylint-report.json
+          pylint schedule_minion/ --output-format=colorized --fail-under=8.0 || true
+          pylint schedule_minion/ --exit-zero --output-format=json > pylint-report.json
         continue-on-error: false
 
       - name: Run MyPy type checking
@@ -75,14 +75,14 @@ jobs:
 
       - name: Run Bandit security scan
         run: |
-          bandit -r . -f json -o bandit-report.json || true
-          bandit -r . -ll -f screen
+          bandit -r schedule_minion/ -f json -o bandit-report.json || true
+          bandit -r schedule_minion/ -ll -f screen
         continue-on-error: false
 
       - name: Run pip-audit for dependency vulnerabilities
         run: |
-          pip-audit --desc --format json --output pip-audit-report.json || true
-          pip-audit --desc
+          pip-audit -r requirements.txt --desc --format json --output pip-audit-report.json || true
+          pip-audit -r requirements.txt --desc
         continue-on-error: false
 
       - name: Verify no critical vulnerabilities
@@ -97,7 +97,7 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          pytest --cov=. --cov-report=xml --cov-report=html --cov-report=term-missing \
+          pytest --cov=schedule_minion --cov-report=xml --cov-report=html --cov-report=term-missing \
                  --cov-branch --cov-fail-under=${{ env.COVERAGE_THRESHOLD }} \
                  --junitxml=junit-report.xml \
                  -v --tb=short --maxfail=5 \

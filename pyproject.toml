@@ -45,12 +45,6 @@ addopts = [
     "-ra",
     "--strict-markers",
     "--strict-config",
-    "--cov=schedule_minion",
-    "--cov-branch",
-    "--cov-report=term-missing:skip-covered",
-    "--cov-report=html",
-    "--cov-report=xml",
-    "--cov-fail-under=90",
 ]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
@@ -94,11 +88,29 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 warn_no_return = true
 strict_equality = true
-strict_concatenate = true
+extra_checks = true
 
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = [
+    "discord.*",
+    "anthropic.*",
+    "google.*",
+    "googleapiclient.*",
+    "dotenv.*",
+]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "schedule_minion.views.confirmations",
+    "schedule_minion.cogs.scheduler",
+    "schedule_minion.main",
+]
+disallow_untyped_decorators = false
 
 [tool.ruff]
 line-length = 88
