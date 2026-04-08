@@ -16,6 +16,9 @@ htmlcov/
 coverage.xml
 .coverage
 
+# Test reports
+junit-report.xml
+
 # IDE
 .vscode/
 .idea/
