@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
+import discord
 from discord.ext import commands, tasks
 
 from schedule_minion.constants import ALL_FAMILY
@@ -15,8 +16,6 @@ from schedule_minion.models.events import IntentType
 from schedule_minion.views.confirmations import ConfirmView
 
 if TYPE_CHECKING:
-    import discord
-
     from schedule_minion.config import Settings
     from schedule_minion.models.events import (
         CalendarEvent,
@@ -325,7 +324,7 @@ class SchedulerCog(commands.Cog):
             return
 
         channel = self.bot.get_channel(self.settings.discord_channel_id)
-        if channel is None:
+        if not isinstance(channel, discord.abc.Messageable):
             return
 
         week_start = now + timedelta(days=1)
