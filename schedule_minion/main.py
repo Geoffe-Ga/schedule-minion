@@ -34,6 +34,7 @@ async def setup_bot() -> commands.Bot:
 
     calendar_service = CalendarService(
         credentials_path=settings.google_credentials_path,
+        credentials_info=settings.google_credentials_info,
         timezone=settings.timezone,
     )
     nlp_service = NLPService(

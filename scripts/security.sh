@@ -72,7 +72,7 @@ echo "=== Security Checks (pip-audit) ==="
 if $VERBOSE; then
     echo "Running pip-audit dependency checker..."
 fi
-pip-audit || { echo "✗ pip-audit found issues" >&2; exit 1; }
+pip-audit -r requirements.txt || { echo "✗ pip-audit found issues" >&2; exit 1; }
 
 if $FULL; then
     echo "=== Comprehensive Security Scan ==="

@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from zoneinfo import ZoneInfo
 
 import pytest
 
 from schedule_minion.constants import ALL_FAMILY
 from schedule_minion.services.calendar_service import (
+    SCOPES,
     CalendarService,
     _build_attendee_line,
     _parse_attendees_from_description,
@@ -28,6 +29,45 @@ def service() -> CalendarService:
     mock_api = MagicMock()
     svc._service = mock_api
     return svc
+
+
+class TestGetServiceCredentials:
+    """Tests for _get_service credential loading paths."""
+
+    def test_uses_from_service_account_info_when_info_provided(self) -> None:
+        creds_info = {"type": "service_account", "project_id": "test"}
+        svc = CalendarService(
+            credentials_info=creds_info, timezone="America/Los_Angeles"
+        )
+
+        with (
+            patch(
+                "schedule_minion.services.calendar_service.service_account"
+                ".Credentials.from_service_account_info"
+            ) as mock_info,
+            patch("schedule_minion.services.calendar_service.build"),
+        ):
+            mock_info.return_value = MagicMock()
+            svc._get_service()
+
+        mock_info.assert_called_once_with(creds_info, scopes=SCOPES)
+
+    def test_uses_from_service_account_file_when_path_provided(self) -> None:
+        svc = CalendarService(
+            credentials_path="fake.json", timezone="America/Los_Angeles"
+        )
+
+        with (
+            patch(
+                "schedule_minion.services.calendar_service.service_account"
+                ".Credentials.from_service_account_file"
+            ) as mock_file,
+            patch("schedule_minion.services.calendar_service.build"),
+        ):
+            mock_file.return_value = MagicMock()
+            svc._get_service()
+
+        mock_file.assert_called_once_with("fake.json", scopes=SCOPES)
 
 
 class TestCreateEvent:

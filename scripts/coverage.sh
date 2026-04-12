@@ -88,7 +88,7 @@ if $XML_REPORT; then
 fi
 
 # Run tests with coverage
-pytest "${PYTEST_ARGS[@]}" tests/ || {
+python -m pytest "${PYTEST_ARGS[@]}" tests/ || {
     echo "✗ Coverage below threshold" >&2
     exit 1
 }

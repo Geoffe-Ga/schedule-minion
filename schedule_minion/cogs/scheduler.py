@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
+import discord
 from discord.ext import commands, tasks
 
 from schedule_minion.constants import ALL_FAMILY
@@ -15,8 +16,6 @@ from schedule_minion.models.events import IntentType
 from schedule_minion.views.confirmations import ConfirmView
 
 if TYPE_CHECKING:
-    import discord
-
     from schedule_minion.config import Settings
     from schedule_minion.models.events import (
         CalendarEvent,
@@ -325,7 +324,7 @@ class SchedulerCog(commands.Cog):
             return
 
         channel = self.bot.get_channel(self.settings.discord_channel_id)
-        if channel is None:
+        if not isinstance(channel, discord.abc.Messageable):
             return
 
         week_start = now + timedelta(days=1)
@@ -338,7 +337,7 @@ class SchedulerCog(commands.Cog):
         )
 
         if not events:
-            await channel.send(  # type: ignore[union-attr]
+            await channel.send(
                 "**Weekly Briefing**\n\n"
                 "Nothing on the books this week! "
                 "The Minion awaits your commands."
@@ -362,7 +361,7 @@ class SchedulerCog(commands.Cog):
                 summary_lines.append(f"  * {time_str} -- **{e.title}**{loc}{att}")
 
         summary = "\n".join(summary_lines)
-        await channel.send(  # type: ignore[union-attr]
+        await channel.send(
             f"**Weekly Briefing -- Here's what's coming up!**\n{summary}\n\n"
             f"*Your faithful Minion is standing by for changes.*"
         )

@@ -740,7 +740,7 @@ class TestWeeklySummary:
     @pytest.mark.asyncio
     async def test_sunday_no_events(self, cog: SchedulerCog) -> None:
         sunday = datetime(2026, 3, 1, 18, 0, tzinfo=TZ)  # Sunday
-        mock_channel = MagicMock()
+        mock_channel = MagicMock(spec=discord.TextChannel)
         mock_channel.send = AsyncMock()
         cog.bot.get_channel.return_value = mock_channel
         cog.calendar_service.get_events = AsyncMock(return_value=[])
@@ -764,7 +764,7 @@ class TestWeeklySummary:
             start_time=datetime(2026, 3, 3, 16, 0, tzinfo=TZ),
             end_time=datetime(2026, 3, 3, 17, 0, tzinfo=TZ),
         )
-        mock_channel = MagicMock()
+        mock_channel = MagicMock(spec=discord.TextChannel)
         mock_channel.send = AsyncMock()
         cog.bot.get_channel.return_value = mock_channel
         cog.calendar_service.get_events = AsyncMock(return_value=[event])
@@ -799,7 +799,7 @@ class TestWeeklySummary:
             end_time=datetime(2026, 3, 3, 17, 0, tzinfo=TZ),
             attendees=["Dad", "Layla"],
         )
-        mock_channel = MagicMock()
+        mock_channel = MagicMock(spec=discord.TextChannel)
         mock_channel.send = AsyncMock()
         cog.bot.get_channel.return_value = mock_channel
         cog.calendar_service.get_events = AsyncMock(return_value=[event])
