@@ -368,6 +368,86 @@ class TestFindConflicts:
         assert conflicts[0].title == "Existing Event"
 
 
+class TestGetEvent:
+    """Tests for CalendarService.get_event."""
+
+    @pytest.mark.asyncio
+    async def test_returns_event_from_first_calendar(
+        self, service: CalendarService
+    ) -> None:
+        mock_execute = MagicMock(
+            return_value={
+                "id": "evt-1",
+                "summary": "Dentist",
+                "start": {"dateTime": "2026-03-03T15:00:00-08:00"},
+                "end": {"dateTime": "2026-03-03T16:00:00-08:00"},
+                "location": "123 Molar St",
+            }
+        )
+        service._service.events.return_value.get.return_value.execute = mock_execute
+
+        event = await service.get_event(calendar_ids=["cal-a"], event_id="evt-1")
+
+        assert event.event_id == "evt-1"
+        assert event.title == "Dentist"
+        assert event.calendar_id == "cal-a"
+        assert event.location == "123 Molar St"
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_later_calendars(
+        self, service: CalendarService
+    ) -> None:
+        mock_execute = MagicMock(
+            side_effect=[
+                RuntimeError("404"),
+                {
+                    "id": "evt-2",
+                    "summary": "Swim Class",
+                    "start": {"dateTime": "2026-03-04T10:00:00-08:00"},
+                    "end": {"dateTime": "2026-03-04T11:00:00-08:00"},
+                },
+            ]
+        )
+        service._service.events.return_value.get.return_value.execute = mock_execute
+
+        event = await service.get_event(
+            calendar_ids=["cal-a", "cal-b"], event_id="evt-2"
+        )
+
+        assert event.event_id == "evt-2"
+        assert event.calendar_id == "cal-b"
+
+    @pytest.mark.asyncio
+    async def test_raises_key_error_when_not_found(
+        self, service: CalendarService
+    ) -> None:
+        service._service.events.return_value.get.return_value.execute = MagicMock(
+            side_effect=RuntimeError("404")
+        )
+
+        with pytest.raises(KeyError):
+            await service.get_event(calendar_ids=["cal-a"], event_id="missing")
+
+    @pytest.mark.asyncio
+    async def test_parses_attendees_from_description(
+        self, service: CalendarService
+    ) -> None:
+        mock_execute = MagicMock(
+            return_value={
+                "id": "evt-3",
+                "summary": "Picnic",
+                "start": {"dateTime": "2026-03-05T11:00:00-08:00"},
+                "end": {"dateTime": "2026-03-05T12:00:00-08:00"},
+                "description": "Attendees: Dad, Layla",
+            }
+        )
+        service._service.events.return_value.get.return_value.execute = mock_execute
+
+        event = await service.get_event(calendar_ids=["cal-a"], event_id="evt-3")
+
+        assert event.attendees == ["Dad", "Layla"]
+
+
 class TestBuildAttendeeLine:
     """Tests for _build_attendee_line helper."""
 

@@ -40,6 +40,28 @@ def _parse_attendees_from_description(description: str | None) -> list[str]:
     return []
 
 
+def _item_to_event(item: dict, calendar_id: str) -> CalendarEvent:
+    """Convert a Google Calendar API event resource into a CalendarEvent."""
+    start = item["start"].get("dateTime", item["start"].get("date"))
+    end = item["end"].get("dateTime", item["end"].get("date"))
+
+    description = item.get("description")
+    attendees = _parse_attendees_from_description(description)
+    if not attendees:
+        attendees = [a["email"] for a in item.get("attendees", [])]
+
+    return CalendarEvent(
+        event_id=item["id"],
+        calendar_id=calendar_id,
+        title=item.get("summary", "Untitled"),
+        start_time=datetime.fromisoformat(start),
+        end_time=datetime.fromisoformat(end),
+        location=item.get("location"),
+        attendees=attendees,
+        description=description,
+    )
+
+
 class CalendarService:
     """Manages Google Calendar events via the Google Calendar API."""
 
@@ -172,31 +194,40 @@ class CalendarService:
                     if item["id"] in seen_ids:
                         continue
                     seen_ids.add(item["id"])
-
-                    start = item["start"].get("dateTime", item["start"].get("date"))
-                    end = item["end"].get("dateTime", item["end"].get("date"))
-
-                    description = item.get("description")
-                    attendees = _parse_attendees_from_description(description)
-                    if not attendees:
-                        attendees = [a["email"] for a in item.get("attendees", [])]
-
-                    all_events.append(
-                        CalendarEvent(
-                            event_id=item["id"],
-                            calendar_id=cal_id,
-                            title=item.get("summary", "Untitled"),
-                            start_time=datetime.fromisoformat(start),
-                            end_time=datetime.fromisoformat(end),
-                            location=item.get("location"),
-                            attendees=attendees,
-                            description=description,
-                        )
-                    )
+                    all_events.append(_item_to_event(item, cal_id))
             except Exception:
                 logger.exception("Failed to fetch events from %s", cal_id)
 
         return sorted(all_events, key=lambda e: e.start_time)
+
+    async def get_event(
+        self,
+        calendar_ids: list[str],
+        event_id: str,
+    ) -> CalendarEvent:
+        """Look up a single event by ID across the given calendars.
+
+        Args:
+            calendar_ids: Calendar IDs to search, in order.
+            event_id: The event to find.
+
+        Returns:
+            The matching CalendarEvent from the first calendar that has it.
+
+        Raises:
+            KeyError: If no calendar contains the event.
+        """
+        service = self._get_service()
+        for cal_id in calendar_ids:
+            try:
+                item = await self._run_sync(
+                    service.events().get(calendarId=cal_id, eventId=event_id).execute
+                )
+            except Exception:
+                logger.debug("Event %s not found in %s", event_id, cal_id)
+                continue
+            return _item_to_event(item, cal_id)
+        raise KeyError(event_id)
 
     async def delete_event(self, calendar_id: str, event_id: str) -> bool:
         """Delete a calendar event.
