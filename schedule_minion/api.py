@@ -14,23 +14,27 @@ the app (single host) and expire after ``PENDING_TTL_SECONDS``.
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import datetime as dt
 import json
 import logging
+import signal
 import uuid
 from typing import TYPE_CHECKING, Any
 
 from aiohttp import web
+from dotenv import load_dotenv
 
 from schedule_minion.auth_middleware import aiohttp_auth_middleware
+from schedule_minion.config import ApiSettings
+from schedule_minion.services.calendar_service import CalendarService
+from schedule_minion.services.nlp_service import NLPService
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from schedule_minion.models.events import CalendarEvent, ParsedIntent
-    from schedule_minion.services.calendar_service import CalendarService
-    from schedule_minion.services.nlp_service import NLPService
 
     Handler = Callable[[web.Request], Awaitable[web.StreamResponse]]
 
@@ -475,3 +479,93 @@ def build_app(
     api.router.add_delete("/events/{event_id}", delete_event)
     app.add_subapp("/api/v1", api)
     return app
+
+
+async def start_api(
+    *,
+    calendar: CalendarService,
+    nlp: NLPService,
+    calendar_ids: list[str],
+    host: str,
+    port: int,
+) -> web.AppRunner:
+    """Start the API server; the caller owns cleanup.
+
+    Args:
+        calendar: The calendar service used by the event endpoints.
+        nlp: The NLP service used to parse free-form text.
+        calendar_ids: Google calendar IDs queried by the event endpoints.
+        host: Interface to bind (localhost-only on the VPS).
+        port: TCP port to listen on.
+
+    Returns:
+        The started AppRunner; call ``await runner.cleanup()`` to stop.
+    """
+    runner = web.AppRunner(
+        build_app(calendar=calendar, nlp=nlp, calendar_ids=calendar_ids)
+    )
+    await runner.setup()
+    site = web.TCPSite(runner, host, port)
+    await site.start()
+    LOG.info("schedule-minion API listening on %s:%s", host, port)
+    return runner
+
+
+async def serve(settings: ApiSettings, *, stop: asyncio.Event | None = None) -> None:
+    """Run the standalone API until stopped, then clean up the runner.
+
+    Builds the calendar and NLP services from the given settings, serves
+    the API, and waits. SIGINT/SIGTERM set the stop event so a
+    ``systemctl --user stop`` shuts the server down gracefully.
+
+    Args:
+        settings: Environment-derived configuration for the API process.
+        stop: Optional externally-controlled shutdown event; a fresh
+            event driven only by signals is used when omitted.
+    """
+    stop_event = stop if stop is not None else asyncio.Event()
+    calendar = CalendarService(
+        timezone=settings.timezone,
+        credentials_path=settings.google_credentials_path,
+        credentials_info=settings.google_credentials_info,
+    )
+    nlp = NLPService(
+        api_key=settings.anthropic_api_key,
+        timezone=settings.timezone,
+    )
+    runner = await start_api(
+        calendar=calendar,
+        nlp=nlp,
+        calendar_ids=[settings.family_calendar_id],
+        host=settings.host,
+        port=settings.port,
+    )
+    loop = asyncio.get_running_loop()
+    handled_signals = (signal.SIGINT, signal.SIGTERM)
+    for sig in handled_signals:
+        loop.add_signal_handler(sig, stop_event.set)
+    try:
+        await stop_event.wait()
+    finally:
+        for sig in handled_signals:
+            loop.remove_signal_handler(sig)
+        await runner.cleanup()
+        LOG.info("schedule-minion API shut down cleanly")
+
+
+def main() -> None:
+    """Run the standalone schedule-minion API (``python -m schedule_minion.api``).
+
+    This is the entire service after the RubotPaul cutover: it loads
+    ``.env``, validates configuration, and serves until signalled.
+    """
+    load_dotenv()
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+    asyncio.run(serve(ApiSettings.from_env()))
+
+
+if __name__ == "__main__":
+    main()
