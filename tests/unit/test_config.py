@@ -8,100 +8,107 @@ from unittest.mock import patch
 
 import pytest
 
-from schedule_minion.config import Settings
+from schedule_minion.auth_middleware import SECRET_ENV_VAR
+from schedule_minion.config import (
+    API_PORT_ENV_VAR,
+    DEFAULT_API_HOST,
+    DEFAULT_API_PORT,
+    ApiSettings,
+)
+
+BASE_ENV = {
+    "ANTHROPIC_API_KEY": "sk-test-key",
+    "FAMILY_CALENDAR_ID": "family@group.calendar.google.com",
+    "GOOGLE_CREDENTIALS_PATH": "creds/sa.json",
+    SECRET_ENV_VAR: "test-shared-secret",
+}
 
 
-class TestSettings:
-    """Tests for Settings configuration."""
+class TestApiSettings:
+    """Tests for ApiSettings configuration."""
 
     def test_from_env_loads_all_required_fields(self) -> None:
-        env = {
-            "DISCORD_TOKEN": "test-token",
-            "DISCORD_CHANNEL_ID": "123456",
-            "ANTHROPIC_API_KEY": "sk-test-key",
-            "GOOGLE_CREDENTIALS_PATH": "creds/sa.json",
-            "FAMILY_CALENDAR_ID": "family@group.calendar.google.com",
-        }
-        with patch.dict(os.environ, env, clear=False):
-            settings = Settings.from_env()
+        with patch.dict(os.environ, BASE_ENV, clear=True):
+            settings = ApiSettings.from_env()
 
-        assert settings.discord_token == "test-token"
-        assert settings.discord_channel_id == 123456
         assert settings.anthropic_api_key == "sk-test-key"
+        assert settings.family_calendar_id == "family@group.calendar.google.com"
         assert settings.google_credentials_path == "creds/sa.json"
         assert settings.google_credentials_info is None
-        assert settings.family_calendar_id == "family@group.calendar.google.com"
 
-    def test_default_timezone(self) -> None:
-        env = {
-            "DISCORD_TOKEN": "t",
-            "DISCORD_CHANNEL_ID": "1",
-            "ANTHROPIC_API_KEY": "k",
-            "GOOGLE_CREDENTIALS_PATH": "p",
-            "FAMILY_CALENDAR_ID": "c",
-        }
-        with patch.dict(os.environ, env, clear=False):
-            settings = Settings.from_env()
+    def test_from_env_defaults(self) -> None:
+        with patch.dict(os.environ, BASE_ENV, clear=True):
+            settings = ApiSettings.from_env()
 
         assert settings.timezone == "America/Los_Angeles"
+        assert settings.host == DEFAULT_API_HOST == "127.0.0.1"
+        assert settings.port == DEFAULT_API_PORT == 8003
 
-    def test_missing_env_var_raises(self) -> None:
-        with patch.dict(os.environ, {}, clear=True), pytest.raises(KeyError):
-            Settings.from_env()
+    def test_from_env_custom_port(self) -> None:
+        env = {**BASE_ENV, API_PORT_ENV_VAR: "9010"}
+        with patch.dict(os.environ, env, clear=True):
+            assert ApiSettings.from_env().port == 9010
+
+    def test_from_env_missing_vars_lists_all(self) -> None:
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            pytest.raises(RuntimeError) as excinfo,
+        ):
+            ApiSettings.from_env()
+
+        message = str(excinfo.value)
+        assert "ANTHROPIC_API_KEY" in message
+        assert "FAMILY_CALENDAR_ID" in message
+        assert SECRET_ENV_VAR in message
+        assert "GOOGLE_CREDENTIALS" in message
+
+    def test_from_env_missing_google_credentials_only(self) -> None:
+        env = {k: v for k, v in BASE_ENV.items() if k != "GOOGLE_CREDENTIALS_PATH"}
+        with (
+            patch.dict(os.environ, env, clear=True),
+            pytest.raises(RuntimeError, match="GOOGLE_CREDENTIALS"),
+        ):
+            ApiSettings.from_env()
+
+    def test_from_env_non_integer_port(self) -> None:
+        env = {**BASE_ENV, API_PORT_ENV_VAR: "eight-thousand"}
+        with (
+            patch.dict(os.environ, env, clear=True),
+            pytest.raises(ValueError, match=API_PORT_ENV_VAR),
+        ):
+            ApiSettings.from_env()
+
+    @pytest.mark.parametrize("port", [0, -1, 65536])
+    def test_port_out_of_range(self, port: int) -> None:
+        with pytest.raises(ValueError, match="port"):
+            ApiSettings(
+                anthropic_api_key="k",
+                family_calendar_id="c",
+                google_credentials_path="p",
+                port=port,
+            )
 
     def test_frozen_dataclass(self) -> None:
-        env = {
-            "DISCORD_TOKEN": "t",
-            "DISCORD_CHANNEL_ID": "1",
-            "ANTHROPIC_API_KEY": "k",
-            "GOOGLE_CREDENTIALS_PATH": "p",
-            "FAMILY_CALENDAR_ID": "c",
-        }
-        with patch.dict(os.environ, env, clear=False):
-            settings = Settings.from_env()
+        with patch.dict(os.environ, BASE_ENV, clear=True):
+            settings = ApiSettings.from_env()
 
         with pytest.raises(AttributeError):
-            settings.discord_token = "new-value"  # type: ignore[misc]
+            settings.anthropic_api_key = "new-value"  # type: ignore[misc]
 
     def test_google_credentials_json_stores_info_dict(self) -> None:
         creds = {"type": "service_account", "project_id": "test"}
-        env = {
-            "DISCORD_TOKEN": "t",
-            "DISCORD_CHANNEL_ID": "1",
-            "ANTHROPIC_API_KEY": "k",
-            "GOOGLE_CREDENTIALS_JSON": json.dumps(creds),
-            "FAMILY_CALENDAR_ID": "c",
-        }
-        with patch.dict(os.environ, env, clear=False):
-            settings = Settings.from_env()
+        env = {k: v for k, v in BASE_ENV.items() if k != "GOOGLE_CREDENTIALS_PATH"}
+        env["GOOGLE_CREDENTIALS_JSON"] = json.dumps(creds)
+        with patch.dict(os.environ, env, clear=True):
+            settings = ApiSettings.from_env()
 
         assert settings.google_credentials_info == creds
         assert settings.google_credentials_path == ""
 
     def test_credentials_path_takes_precedence_over_json(self) -> None:
-        env = {
-            "DISCORD_TOKEN": "t",
-            "DISCORD_CHANNEL_ID": "1",
-            "ANTHROPIC_API_KEY": "k",
-            "GOOGLE_CREDENTIALS_PATH": "explicit/path.json",
-            "GOOGLE_CREDENTIALS_JSON": '{"should": "be ignored"}',
-            "FAMILY_CALENDAR_ID": "c",
-        }
-        with patch.dict(os.environ, env, clear=False):
-            settings = Settings.from_env()
+        env = {**BASE_ENV, "GOOGLE_CREDENTIALS_JSON": '{"should": "be ignored"}'}
+        with patch.dict(os.environ, env, clear=True):
+            settings = ApiSettings.from_env()
 
-        assert settings.google_credentials_path == "explicit/path.json"
+        assert settings.google_credentials_path == "creds/sa.json"
         assert settings.google_credentials_info is None
-
-    def test_no_credentials_raises(self) -> None:
-        env = {
-            "DISCORD_TOKEN": "t",
-            "DISCORD_CHANNEL_ID": "1",
-            "ANTHROPIC_API_KEY": "k",
-            "FAMILY_CALENDAR_ID": "c",
-        }
-        with (
-            patch.dict(os.environ, env, clear=False),
-            pytest.raises(KeyError, match="GOOGLE_CREDENTIALS"),
-        ):
-            Settings.from_env()
